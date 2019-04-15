@@ -266,15 +266,17 @@ void user_init()
 
 	led_init();
 
-
+	// MAC地址计算
 	u8  tbl_mac [] = {0xe1, 0xe1, 0xe2, 0xe3, 0xe4, 0xc7};
 	u32 *pmac = (u32 *) CFG_ADR_MAC;
+	// 读取MAC地址
 	if (*pmac != 0xffffffff)
 	{
 	    memcpy (tbl_mac, pmac, 6);
 	}
     else
     {
+    	// 随机生成mac地址，写入flash中
         //TODO : should write mac to flash after pair OK
         tbl_mac[0] = (u8)rand();
         flash_write_page (CFG_ADR_MAC, 6, tbl_mac);
@@ -283,15 +285,20 @@ void user_init()
 
 ///////////// BLE stack Initialization ////////////////
 	////// Controller Initialization  //////////
+	// 初始化几个状态
+	// 初始状态，init
 	blc_ll_initBasicMCU(tbl_mac);   //mandatory
-
+	// ADV状态
 	blc_ll_initAdvertising_module(tbl_mac); 	//adv module: 		 mandatory for BLE slave,
+	// slave conn状态
 	blc_ll_initSlaveRole_module();				//slave module: 	 mandatory for BLE slave,
+	// powermanage使能
 	blc_ll_initPowerManagement_module();        //pm module:      	 optional
 
 
 	////// Host Initialization  //////////
 	extern void my_att_init ();
+	// 属性表格初始化。
 	my_att_init (); //gatt initialization
 	blc_l2cap_register_handler (blc_l2cap_packet_receive);  	//l2cap initialization
 #if SIG_PROC_ENABLE
@@ -310,19 +317,20 @@ void user_init()
 #endif
 
 	///////////////////// USER application initialization ///////////////////
-
+	// 设置广播名称
 	bls_ll_setAdvData( (u8 *)tbl_advData, sizeof(tbl_advData) );
+	// 设置scan response名称
 	bls_ll_setScanRspData( (u8 *)tbl_scanRsp, sizeof(tbl_scanRsp));
 
 
 
 
 	////////////////// config adv packet /////////////////////
-	u8 status = bls_ll_setAdvParam( ADV_INTERVAL_30MS, ADV_INTERVAL_30MS + 16,
-								 ADV_TYPE_CONNECTABLE_UNDIRECTED, OWN_ADDRESS_PUBLIC,
+	u8 status = bls_ll_setAdvParam( ADV_INTERVAL_30MS, ADV_INTERVAL_30MS + 16,	// 广播时间间隔，在最小和最大时间间隔之间变化
+								 ADV_TYPE_CONNECTABLE_UNDIRECTED, OWN_ADDRESS_PUBLIC,	// 广播类型
 								 0,  NULL,
-								 MY_APP_ADV_CHANNEL,
-								 ADV_FP_NONE);
+								 MY_APP_ADV_CHANNEL,	// 广播通道
+								 ADV_FP_NONE);		// 白名单
 
 	if(status != BLE_SUCCESS)
 	{
@@ -332,21 +340,23 @@ void user_init()
 
 
     printf("\n\rAdv parameters setting success!\n\r");
-	bls_ll_setAdvEnable(1);  //adv enable
+	bls_ll_setAdvEnable(1);  //adv enable		// 广播使能
 	printf("Enable ble adv!\n\r");
-	rf_set_power_level_index (RF_POWER_8dBm);
-
+	rf_set_power_level_index (RF_POWER_8dBm);		// RF的功率设置
+	// SUSPEND_DISABLE:禁用SUSPEND模式，不会进入低功耗
+	// SUSPEND_ADV: 广播的时候可以进入低功耗
+	// SUSPEND_CONN: 连接状态下可以进入低功耗
 	bls_pm_setSuspendMask (SUSPEND_DISABLE);//(SUSPEND_ADV | SUSPEND_CONN)
 
 
 	////////////////// SPP initialization ///////////////////////////////////
-	#if (HCI_ACCESS==HCI_USE_USB)
+/*	#if (HCI_ACCESS==HCI_USE_USB)
 		blt_set_bluetooth_version (BLUETOOTH_VER_4_2);
 		bls_ll_setAdvChannelMap (BLT_ENABLE_ADV_37);
 		usb_bulk_drv_init (0);
 		blc_register_hci_handler (blc_hci_rx_from_usb, blc_hci_tx_to_usb);
 		bls_smp_enableParing (SMP_PARING_CONN_TRRIGER );
-	#else	//uart
+	#else	//uart */
 		//one gpio should be configured to act as the wakeup pin if in power saving mode; pending
 		//todo:uart init here
 #if __PROJECT_8266_MODULE__
@@ -357,21 +367,26 @@ void user_init()
 		gpio_write (GPIO_UTX, 1);			//pull-high RX to avoid mis-trig by floating signal
 		gpio_write (GPIO_URX, 1);			//pull-high RX to avoid mis-trig by floating signal
 #else
-		gpio_set_input_en(GPIO_PB2, 1);
-		gpio_set_input_en(GPIO_PB3, 1);
-		gpio_setup_up_down_resistor(GPIO_PB2, PM_PIN_PULLUP_1M);
-		gpio_setup_up_down_resistor(GPIO_PB3, PM_PIN_PULLUP_1M);
-		uart_io_init(UART_GPIO_8267_PB2_PB3);
+		// 自己修改了一下，使用PA6和PA7作为串口使用
+		gpio_set_input_en(GPIO_PA6, 1);
+		gpio_set_input_en(GPIO_PA7, 1);
+		gpio_setup_up_down_resistor(GPIO_PA6, PM_PIN_PULLUP_1M);
+		gpio_setup_up_down_resistor(GPIO_PA7, PM_PIN_PULLUP_1M);
+		uart_io_init(UART_GPIO_8267_PA6_PA7);
 #endif
+		// 清中断标志位
 		reg_dma_rx_rdy0 = FLD_DMA_UART_RX | FLD_DMA_UART_TX; //clear uart rx/tx status
-		CLK16M_UART115200;
+		CLK16M_UART115200;		// 波特率
+		// 接受和发送缓存初始化
 		uart_BuffInit(hci_rx_fifo_b, hci_rx_fifo.size, hci_tx_fifo_b);
 		extern int rx_from_uart_cb (void);
 		extern int tx_to_uart_cb (void);
+		// 中断处理函数，回调函数，在DMA中断接受完之后，调用
 		blc_register_hci_handler(rx_from_uart_cb,tx_to_uart_cb);				//customized uart handler
-	#endif
+//	#endif
 
 	extern int event_handler(u32 h, u8 *para, int n);
+	// 事件处理函数
 	blc_hci_registerControllerEventHandler(event_handler);		//register event callback
 	bls_hci_mod_setEventMask_cmd(0xffff);			//enable all 15 events,event list see ble_ll.h
 

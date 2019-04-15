@@ -131,10 +131,11 @@ void	spp_test_read (u8 *p, int n)
 		while (1);
 	}
 }
-
+// 蓝牙回调函数
 int module_onReceiveData(rf_packet_att_write_t *p)
 {
 	u32 n;
+	// 计算接受数据的长度
 	u8 len = p->l2capLen - 3;
 	if(len > 0)
 	{
@@ -152,10 +153,12 @@ int module_onReceiveData(rf_packet_att_write_t *p)
 		}
 #endif
 		u32 header;
+		// 数据接收事件的header
 		header = 0x07a0;		//data received event
 		header |= (3 << 16) | (1<<24);
 		spp_test_read (&p->value, len);
 		extern int hci_send_data (u32 h, u8 *para, int n);
+		// 发送数据，因为已经在中断处理函数中和DMA地址关联，所以直接改里面的参数就可以发送了
 		hci_send_data(header, &p->opcode, len + 3);		//HCI_FLAG_EVENT_TLK_MODULE
 	}
 

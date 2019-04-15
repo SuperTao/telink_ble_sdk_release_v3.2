@@ -208,8 +208,10 @@ void my_fifo_pop (my_fifo_t *f)
 
 u8 * my_fifo_get (my_fifo_t *f)
 {
+	// 读的记录和写的记录不相等，所有空间可以使用
 	if (f->rptr != f->wptr)
 	{
+		// 获取空间的指针
 		u8 *p = f->p + (f->rptr & (f->num-1)) * f->size;
 		return p;
 	}

@@ -137,10 +137,12 @@ int rx_from_uart_cb (void)//UART data send to Master,we will handler the data as
 	}
 
 	u8* p = my_fifo_get(&hci_rx_fifo);
+	// 获取数据长度接受数据的开始4个字节是数据长度
 	u32 rx_len = p[0]; //usually <= 255 so 1 byte should be sufficient
 
 	if (rx_len)
 	{
+		// 处理数据， 第一个参数是数据的首地址，第二个参数是除去开头四个字节的长度
 		bls_uart_handler(&p[4], rx_len - 4);
 		my_fifo_pop(&hci_rx_fifo);
 	}
@@ -154,12 +156,15 @@ int bls_uart_handler (u8 *p, int n)
 	u8  status = BLE_SUCCESS;
 	int  cmdLen;
 	u8 *cmdPara;
-
+	// 这一部分的代码根据格式进行修改，如果是纯数据，这一部分可以不要
+	// 直接把数据通过蓝牙发送出去就好，不需要判断那么多的cmd，header
+	// 命令
 	u16 cmd = p[0]|p[1]<<8;
 	u32	header = 0;
 	u8	para[16] = {0};
 	u8 para_len = 1;
 	cmdPara = p + 4;
+	// 长度
 	cmdLen = p[2] | p[3]<<8;
 	header = ((p[0] + p[1] * 256) & 0x3ff) | 0x400;		//event complete
 	header |= (3 << 16) | HCI_FLAG_EVENT_TLK_MODULE;
@@ -276,15 +281,18 @@ int bls_uart_handler (u8 *p, int n)
 	{
 
 	}
+	// 发送数据，通过NOTIFY发出
 	//change format to 1c ff 07 00 11 00 01 02 03 04 05
 	else if (cmd == SPP_CMD_SEND_NOTIFY_DATA)
 	{
+		// 判断数据长度
 		if (cmdLen > 42)
 		{
 			status = 2;			//data too long
 		}
 		else
 		{
+			// 第一个参数Handler,att_table定义的，第二个参数数据首地址，第三个参数，数据长度
 			status = bls_att_pushNotifyData( cmdPara[0] | (cmdPara[1]<<8), cmdPara + 2,  cmdLen - 2);
 		}
 	}
@@ -302,7 +310,7 @@ u8				hci_buff_rptr = 0;
 #endif
 int hci_send_data (u32 h, u8 *para, int n)
 {
-
+	// 发完数据以后，重新更改指针的位置
 	u8 *p = my_fifo_wptr (&hci_tx_fifo);
 	if (!p || n >= hci_tx_fifo.size)
 	{
@@ -334,12 +342,16 @@ int hci_send_data (u32 h, u8 *para, int n)
 }
 
 uart_data_t T_txdata_buf;
+// 发送数据
 int tx_to_uart_cb (void)
 {
+	// 获取发送数据的首地址
 	u8 *p = my_fifo_get (&hci_tx_fifo);
 	if (p && !uart_tx_is_busy ())
 	{
+		// 拷贝数据到data中
 		memcpy(&T_txdata_buf.data, p + 2, p[0]+p[1]*256);
+		// 数据的长度，这里的长度和fifo里面定义的有些区别，fifo是前两字节保存长度，而接受的数据中是前4字节保存长度
 		T_txdata_buf.len = p[0]+p[1]*256 ;
 
 
@@ -357,9 +369,11 @@ int tx_to_uart_cb (void)
 #if __PROJECT_8266_MODULE__
 		if (uart_Send_kma((u8 *)(&T_txdata_buf)))
 #else
+			// uart发送数据
 		if (uart_Send((u8 *)(&T_txdata_buf)))
 #endif
 		{
+			// 发送完数据以后，FIFO的数据就多一个可以使用
 			my_fifo_pop (&hci_tx_fifo);
 		}
 	}
