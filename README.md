@@ -567,3 +567,18 @@ int tx_to_uart_cb (void)
 	return 0;
 }
 ```
+
+### FIFO定义
+
+app.c
+
+```
+MYFIFO_INIT(hci_rx_fifo, 72, 2);
+MYFIFO_INIT(hci_tx_fifo, 72, 8);
+```
+
+定义了发送和接受的fifo。接收fifo有2组，每组72字节。
+
+接收72字节以内的数据，会触发接收中断。
+
+接收超过72字节的数据，后面的数据将对丢失。
